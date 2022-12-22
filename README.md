@@ -9,7 +9,7 @@ script built as a workaround for this problem.
 
 - Export the complete following or followers list of another user to a CSV
   file — even if that user is on a different server!
-- Export and import lists as CSV files
+- Export and import your lists as CSV files for easy sharing
 
 ## Installation
 
@@ -42,7 +42,7 @@ Use an application name of your choice, then uncheck all roles. Enable these:
 
 Then click Submit.
 
-Add the displayed API s to a file called `config.json` in the same
+Add the displayed API keys to a file called `config.json` in the same
 directory as `listmanager.py`.
 
 Use this template for the file
