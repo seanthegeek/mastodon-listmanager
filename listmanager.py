@@ -14,7 +14,7 @@ from mastodon import Mastodon, AttribAccessDict, MastodonAPIError
 
 """A Python module and CLI tool for managing Mastodon lists"""
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 logging.basicConfig(level=logging.WARNING,
                     format="%(levelname)s: %(message)s")
@@ -38,7 +38,7 @@ class _CLIConfig(object):
 
 def _format_record(record: Union[AttribAccessDict, List,
                                  datetime]) -> Union[
-                                              AttribAccessDict, List]:
+        AttribAccessDict, List]:
     if isinstance(record, datetime):
         record = record.strftime(r"%Y-%m-%d %H:%M:%S")
     elif isinstance(record, list):
@@ -108,7 +108,8 @@ class SimpleMastodon(object):
     def __init__(self, mastodon: Mastodon):
         self.mastodon = mastodon
 
-    def get_account(self, account_address: str) -> Union[AttribAccessDict, None]:
+    def get_account(self, account_address: str) -> Union[AttribAccessDict,
+                                                         None]:
         account_address = account_address.lstrip("@")
         if "@" not in account_address:
             raise ValueError("Must use the full account address (user@domain)")
@@ -125,31 +126,35 @@ class SimpleMastodon(object):
     def unfollow_account(self, account_address: str):
         self.mastodon.account_unfollow(self.get_account(account_address))
 
-    def get_following_accounts(self, account_address: str = None) -> list[AttribAccessDict]:
-        if account_address is None:
-            return _format_record(self.mastodon.account_following(self.mastodon.me()))
-        account_address = account_address.lstrip("@")
-        domain = account_address.split("@")[1]
+    def get_following_accounts(self,
+                               address: str = None) -> list[AttribAccessDict]:
+        if address is None:
+            return _format_record(self.mastodon.account_following(
+                self.mastodon.me()))
+        address = address.lstrip("@")
+        domain = address.split("@")[1]
         if domain == _format_record(self.mastodon.me())["domain"]:
             _mastodon = self.mastodon
         else:
             # Get list directly from the remote instance/server
             _mastodon = Mastodon(api_base_url=f"https://{domain}")
         return _format_record(_mastodon.account_following(
-            _mastodon.account_lookup(account_address)["id"]))
+            _mastodon.account_lookup(address)["id"]))
 
-    def get_follower_accounts(self, account_address: str = None) -> list[AttribAccessDict]:
-        if account_address is None:
-            return _format_record(self.mastodon.account_followers(self.mastodon.me()))
-        account_address = account_address.lstrip("@")
-        domain = account_address.split("@")[1]
+    def get_follower_accounts(self,
+                              address: str = None) -> list[AttribAccessDict]:
+        if address is None:
+            return _format_record(self.mastodon.account_followers(
+                self.mastodon.me()))
+        address = address.lstrip("@")
+        domain = address.split("@")[1]
         if domain == _format_record(self.mastodon.me())["domain"]:
             _mastodon = self.mastodon
         else:
             # Get the list directly from the remote instance/server
             _mastodon = Mastodon(api_base_url=f"https://{domain}")
         return _format_record(_mastodon.account_followers(
-            _mastodon.account_lookup(account_address)["id"]))
+            _mastodon.account_lookup(address)["id"]))
 
     def unfollow_all_accounts(self):
         for account in self.get_following_accounts():
@@ -158,25 +163,29 @@ class SimpleMastodon(object):
     def get_lists(self) -> List[AttribAccessDict]:
         lists = self.mastodon.lists()
         for _list in lists:
-            _list["accounts"] = _format_record(self.mastodon.list_accounts(_list["id"]))
+            _list["accounts"] = _format_record(
+                self.mastodon.list_accounts(_list["id"]))
         return lists
 
-    def get_list(self, list_name: str, create: bool = True) -> AttribAccessDict:
-        _list = list(filter(lambda x: x["title"] == list_name, self.mastodon.lists()))
+    def get_list(self, name: str, create: bool = True) -> AttribAccessDict:
+        _list = list(filter(lambda x: x["title"]
+                     == name, self.mastodon.lists()))
         if len(_list) == 0:
             if not create:
-                ValueError(f"A list named {list_name} does not exist")
-            self.mastodon.list_create(list_name)
-            return self.get_list(list_name)
+                ValueError(f"A list named {name} does not exist")
+            self.mastodon.list_create(name)
+            return self.get_list(name)
         _list = _list[0]
-        _list["accounts"] = _format_record(self.mastodon.list_accounts(_list["id"]))
+        _list["accounts"] = _format_record(
+            self.mastodon.list_accounts(_list["id"]))
         return _list
 
     def delete_list(self, list_name: str):
         _list = self.get_list(list_name, create=False)
         self.mastodon.list_delete(_list["id"])
 
-    def add_account_to_list(self, account_address: str, list_name: str, create_list: bool = True):
+    def add_account_to_list(self, account_address: str,
+                            list_name: str, create_list: bool = True):
         account = self.get_account(account_address)
         _list = self.get_list(list_name, create=create_list)
         if not self.account_in_list(account["id"], list_id=_list["id"]):
@@ -185,8 +194,13 @@ class SimpleMastodon(object):
             try:
                 self.mastodon.list_accounts_add(_list["id"], [account["id"]])
             except MastodonAPIError as e:
+                if e.args[1] == 404:
+                    raise MastodonResourceNotFound(
+                        "Cannot add "
+                        f"{account_address} to a list while "
+                        "the follow request is pending.")
                 # Ignore errors indicating that an account is already in a list
-                if e.args[1] not in [422]:
+                if e.args[1] not in [404, 422]:
                     raise e
 
     def remove_account_from_list(self, account_address, list_name):
@@ -199,7 +213,7 @@ class SimpleMastodon(object):
         for account in _list["accounts"]:
             self.remove_account_from_list(account["acct"], list_name)
 
-    def account_in_list(self, account_id: int,
+    def account_in_list(self, id: int,
                         lists: list[AttribAccessDict] = None,
                         list_id: int = None) -> bool:
         if lists is None:
@@ -207,11 +221,13 @@ class SimpleMastodon(object):
         if list_id is not None:
             _list = list(filter(lambda x: x["id"] == list_id, lists))
             if len(_list) == 0:
-                raise MastodonResourceNotFound(f"List ID {list_id} was not found")
+                raise MastodonResourceNotFound(
+                    f"List ID {list_id} was not found")
             _list = _list[0]
-            return account_id in [account["id"] for account in _list["accounts"]]
+            return id in [account["id"] for account in _list["accounts"]]
         for list_ in lists:
-            if self.account_in_list(account_id, lists=lists, list_id=list_["id"]):
+            if self.account_in_list(id,
+                                    lists=lists, list_id=list_["id"]):
                 return True
         return False
 
@@ -237,7 +253,8 @@ class SimpleMastodon(object):
                 if "Notify on new posts" in account.keys():
                     notify = account["Notify on new posts"].lower() == "true"
             try:
-                self.follow_account(account_address, boosts=boosts, notify=notify)
+                self.follow_account(
+                    account_address, boosts=boosts, notify=notify)
             except Exception as e:
                 logging.warning(f"Unable to follow {account_address}: {e}")
 
@@ -259,9 +276,11 @@ class SimpleMastodon(object):
         for account in accounts:
             account_address = account["Account address"]
             try:
-                self.add_account_to_list(account_address, list_name, create_list=True)
+                self.add_account_to_list(
+                    account_address, list_name, create_list=True)
             except Exception as e:
-                logging.warning(f"Unable to add {account_address} to {list_name}: {e}")
+                logging.warning(
+                    f"Unable to add {account_address} to {list_name}: {e}")
 
     def export_list_csv(self, list_name: str = None) -> str:
         accounts = self.get_list(list_name, create=False)
@@ -301,7 +320,7 @@ def _follow(ctx, account):
 @_main.command("unfollow")
 @click.argument("account")
 @click.pass_context
-def _follow(ctx, account):
+def _unfollow(ctx, account):
     """Unfollow an account."""
     try:
         ctx.obj.mastodon.unfollow_account(account)
@@ -339,15 +358,18 @@ def _export_followers(ctx, account=None, file=None):
         exit(-1)
 
 
-@_export.command("following", help="Export the list of accounts being followed.")
+@_export.command("following",
+                 help="Export the list of accounts being followed.")
 @click.option("--account", "-a", help="The full address of the account.")
-@click.option("--unlisted", "-u", is_flag=True, help="Only output accounts that are not in any list.")
+@click.option("--unlisted", "-u", is_flag=True,
+              help="Only output accounts that are not in any list.")
 @click.option("--file", "-f", help="A file path to write to.")
 @click.pass_context
 def export_following(ctx, account=None, unlisted=False, file=None):
     """Export the list of accounts being followed."""
     if account is not None and unlisted:
-        logging.error("The --unlisted and --account options cannot be used together.")
+        logging.error(
+            "The --unlisted and --account options cannot be used together.")
         exit(1)
     try:
         if unlisted:
@@ -370,7 +392,8 @@ def export_following(ctx, account=None, unlisted=False, file=None):
 
 
 @_export.command("list", help="Export a list.")
-@click.option("--name", "-n", help="The name of a list. Omit to show a list of lists.")
+@click.option("--name", "-n",
+              help="The name of a list. Omit to show a list of lists.")
 @click.option("--file", "-f", help="A file path to write to.")
 @click.pass_context
 def _export_list(ctx, name=None, file=None):
@@ -425,7 +448,8 @@ def _import_following_accounts(ctx, file, replace=False):
 @click.argument("file")
 @click.argument("list_name")
 @click.option("--replace", is_flag=True,
-              help="Remove all existing accounts from the list before importing the new list.")
+              help="Remove all existing accounts from the list before "
+                   "importing the new list.")
 @click.pass_context
 def _import_list(ctx, file, list_name, replace=False):
     try:
