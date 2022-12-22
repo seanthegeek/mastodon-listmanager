@@ -133,3 +133,6 @@ dmypy.json
 
 # API keys
 config.json
+
+# Output files
+*.csv
