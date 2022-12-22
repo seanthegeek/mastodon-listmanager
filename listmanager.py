@@ -271,7 +271,7 @@ class SimpleMastodon(object):
               type=click.Path(),
               help="Path to a configuration file.")
 @click.option("--debug", is_flag=True,
-              help="Show exception tracebacks")
+              help="Show exception tracebacks.")
 @click.pass_context
 def _main(ctx, config, debug):
     """A simple CLI for managing Mastodon follows and lists"""
@@ -283,7 +283,7 @@ def _main(ctx, config, debug):
 @click.argument("account")
 @click.pass_context
 def _follow(ctx, account):
-    """Follow an account"""
+    """Follow an account."""
     try:
         ctx.obj.mastodon.follow_account(account)
     except Exception as e:
@@ -297,7 +297,7 @@ def _follow(ctx, account):
 @click.argument("account")
 @click.pass_context
 def _follow(ctx, account):
-    """Unfollow an account"""
+    """Unfollow an account."""
     try:
         ctx.obj.mastodon.unfollow_account(account)
     except Exception as e:
@@ -312,7 +312,7 @@ def _export():
     """Export accounts being followed or a list to CSV."""
 
 
-@_export.command("followers", help="Export the list of follower accounts")
+@_export.command("followers", help="Export the list of follower accounts.")
 @click.option("--account", "-a", help="The full address of the account.")
 @click.option("--file", "-f", help="A file path to write to.")
 @click.pass_context
@@ -364,12 +364,39 @@ def export_following(ctx, account=None, unlisted=False, file=None):
         exit(-1)
 
 
+@_export.command("list", help="Export a list.")
+@click.option("--name", "-n", help="The name of a list. Omit to show a list of lists.")
+@click.option("--file", "-f", help="A file path to write to.")
+@click.pass_context
+def _export_list(ctx, name=None, file=None):
+    if name is None:
+        click.echo("Please provide the name of a list to export.")
+        for _list in ctx.obj.mastodon.get_lists():
+            click.echo(f"{_list['title']} - {len(_list['accounts'])} accounts")
+        exit(-1)
+    try:
+        output = ctx.obj.mastodon.export_list_csv(name)
+        if file is not None:
+            with open(file, "w",
+                      encoding="utf-8",
+                      newline="\n",
+                      errors="replace") as output_file:
+                output_file.write(output)
+        else:
+            click.echo(output)
+    except Exception as e:
+        logging.error(e)
+        if ctx.obj.debug:
+            logging.error(traceback.format_exc())
+        exit(-1)
+
+
 @_main.group("import")
 def _import():
-    """Import a following accounts CSV or list CSV."""
+    """Import a following CSV or list CSV."""
 
 
-@_import.command("following")
+@_import.command("following", help="Import a CSV list of accounts to follow.")
 @click.argument("file")
 @click.option("--replace", is_flag=True,
               help="Unfollow all accounts before importing the list.")
@@ -389,7 +416,7 @@ def _import_following_accounts(ctx, file, replace=False):
     ctx.obj.mastodon.import_following_csv(input_csv)
 
 
-@_import.command("list")
+@_import.command("list", help="Add accounts from a CSV to a list.")
 @click.argument("file")
 @click.argument("list_name")
 @click.option("--replace", is_flag=True,
@@ -409,7 +436,7 @@ def _import_list(ctx, file, list_name, replace=False):
 
 
 @_main.command("whoami",
-               help="Returns the full username of thc configured account.")
+               help="Returns the full username of the configured account.")
 @click.pass_context
 def _whoami(ctx):
     account = _format_record(ctx.obj.mastodon.mastodon.me())
