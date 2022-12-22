@@ -114,7 +114,7 @@ class SimpleMastodon(object):
             raise ValueError("Must use the full account address (user@domain)")
         results = self.mastodon.account_search(account_address, limit=1)
         if len(results) == 0:
-            return None
+            raise MastodonResourceNotFound(f"{account_address} not found")
         return _format_record(results[0])
 
     def follow_account(self, account_address: str,
