@@ -10,7 +10,7 @@ from datetime import datetime
 
 import click
 
-from mastodon import Mastodon, AttribAccessDict
+from mastodon import Mastodon, AttribAccessDict, MastodonAPIError
 
 """A Python module and CLI tool for managing Mastodon lists"""
 
@@ -182,7 +182,12 @@ class SimpleMastodon(object):
         if not self.account_in_list(account["id"], list_id=_list["id"]):
             # Accounts must be followed before they can be added to a list
             self.mastodon.account_follow(account["id"])
-            self.mastodon.list_accounts_add(_list["id"], [account["id"]])
+            try:
+                self.mastodon.list_accounts_add(_list["id"], [account["id"]])
+            except MastodonAPIError as e:
+                # Ignore errors indicating that an account is already in a list
+                if e.args[1] not in [422]:
+                    raise e
 
     def remove_account_from_list(self, account_address, list_name):
         account = self.get_account(account_address)
