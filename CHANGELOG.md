@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.0
+
+- Add `URL` and `Local URL` CSV columns
+
 ## 1.0.1
 
 - Provide a helpful error message when attempting to add an account to a list while a follow request is pending

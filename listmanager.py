@@ -14,7 +14,7 @@ from mastodon import Mastodon, AttribAccessDict, MastodonAPIError
 
 """A Python module and CLI tool for managing Mastodon lists"""
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 logging.basicConfig(level=logging.WARNING,
                     format="%(levelname)s: %(message)s")
@@ -36,14 +36,14 @@ class _CLIConfig(object):
             exit(-1)
 
 
-def _format_record(record: Union[AttribAccessDict, List,
-                                 datetime]) -> Union[
-        AttribAccessDict, List]:
+def _format_record(record: Union[AttribAccessDict, List, datetime],
+                   me: AttribAccessDict = None) -> Union[AttribAccessDict,
+                                                         List]:
     if isinstance(record, datetime):
         record = record.strftime(r"%Y-%m-%d %H:%M:%S")
     elif isinstance(record, list):
         for i in range(len(record)):
-            _format_record(record[i])
+            _format_record(record[i], me=me)
         return record
     elif isinstance(record, AttribAccessDict):
         for key in record.keys():
@@ -55,45 +55,61 @@ def _format_record(record: Union[AttribAccessDict, List,
             domain = url.hostname
             record["domain"] = domain
             if "acct" in record.keys():
+                username = record["username"]
+                if me is not None:
+                    my_domain = me["domain"]
+                    if record["domain"] != my_domain:
+                        local_url = f"https://{my_domain}/@{username}@{domain}"
+                    else:
+                        local_url = f"https://{my_domain}/@{username}"
+                    record["local_url"] = local_url
                 if "@" not in record["acct"]:
-                    username = record["username"]
                     record["acct"] = f"{username}@{domain}"
     return record
 
 
 def _accounts_to_csv_rows(accounts: Union[List[AttribAccessDict],
-                                          AttribAccessDict]) -> List[Dict]:
+                                          AttribAccessDict],
+                          me: AttribAccessDict = None) -> List[Dict]:
     if isinstance(accounts, AttribAccessDict):
         accounts = [accounts]
     _accounts = accounts.copy()
-    _accounts = _format_record(_accounts)
+    _accounts = _format_record(_accounts, me)
     csv_list = []
     for i in range(len(_accounts)):
         account = _accounts[i]
+        if "local_url" not in account.keys():
+            account["local_url"] = ""
         row = {"Account address": account["acct"],
                "Show boosts": "true",
                "Notify on new posts": "false",
                "Languages": "",
                "Display name": account["display_name"],
                "Bio": account["note"].replace("\n", " "),
+               "URL": account["url"],
+               "Local URL": account["local_url"],
                "Avatar URL": account["avatar"]}
         csv_list.append(row)
     return csv_list
 
 
 def accounts_to_csv(accounts: Union[List[AttribAccessDict],
-                                    AttribAccessDict]) -> str:
+                                    AttribAccessDict],
+                    me: AttribAccessDict = None) -> str:
     fields = ["Account address",
               "Show boosts",
               "Notify on new posts",
               "Languages",
               "Display name",
               "Bio",
+              "Local URL",
+              "URL",
+              "Local URL",
               "Avatar URL"]
     with StringIO() as csv_file:
         account_csv = csv.DictWriter(csv_file, fieldnames=fields)
         account_csv.writeheader()
-        account_csv.writerows(_accounts_to_csv_rows(accounts))
+        account_csv.writerows(_accounts_to_csv_rows(accounts, me=me))
         csv_file.seek(0)
         return csv_file.read()
 
@@ -107,6 +123,7 @@ class SimpleMastodon(object):
 
     def __init__(self, mastodon: Mastodon):
         self.mastodon = mastodon
+        self.me = _format_record(mastodon.me())
 
     def get_account(self, account_address: str) -> Union[AttribAccessDict,
                                                          None]:
@@ -116,7 +133,7 @@ class SimpleMastodon(object):
         results = self.mastodon.account_search(account_address, limit=1)
         if len(results) == 0:
             raise MastodonResourceNotFound(f"{account_address} not found")
-        return _format_record(results[0])
+        return _format_record(results[0], me=self.me)
 
     def follow_account(self, account_address: str,
                        boosts: bool = True, notify: bool = False):
@@ -130,31 +147,31 @@ class SimpleMastodon(object):
                                address: str = None) -> list[AttribAccessDict]:
         if address is None:
             return _format_record(self.mastodon.account_following(
-                self.mastodon.me()))
+                self.me), me=self.me)
         address = address.lstrip("@")
         domain = address.split("@")[1]
-        if domain == _format_record(self.mastodon.me())["domain"]:
+        if domain == self.me["domain"]:
             _mastodon = self.mastodon
         else:
             # Get list directly from the remote instance/server
             _mastodon = Mastodon(api_base_url=f"https://{domain}")
         return _format_record(_mastodon.account_following(
-            _mastodon.account_lookup(address)["id"]))
+            _mastodon.account_lookup(address)["id"]), me=self.me)
 
     def get_follower_accounts(self,
                               address: str = None) -> list[AttribAccessDict]:
         if address is None:
             return _format_record(self.mastodon.account_followers(
-                self.mastodon.me()))
+                self.me, me=self.me))
         address = address.lstrip("@")
         domain = address.split("@")[1]
-        if domain == _format_record(self.mastodon.me())["domain"]:
+        if domain == self.me["domain"]:
             _mastodon = self.mastodon
         else:
             # Get the list directly from the remote instance/server
             _mastodon = Mastodon(api_base_url=f"https://{domain}")
         return _format_record(_mastodon.account_followers(
-            _mastodon.account_lookup(address)["id"]))
+            _mastodon.account_lookup(address)["id"]), me=self.me)
 
     def unfollow_all_accounts(self):
         for account in self.get_following_accounts():
@@ -164,7 +181,7 @@ class SimpleMastodon(object):
         lists = self.mastodon.lists()
         for _list in lists:
             _list["accounts"] = _format_record(
-                self.mastodon.list_accounts(_list["id"]))
+                self.mastodon.list_accounts(_list["id"]), me=self.me)
         return lists
 
     def get_list(self, name: str, create: bool = True) -> AttribAccessDict:
@@ -177,7 +194,7 @@ class SimpleMastodon(object):
             return self.get_list(name)
         _list = _list[0]
         _list["accounts"] = _format_record(
-            self.mastodon.list_accounts(_list["id"]))
+            self.mastodon.list_accounts(_list["id"]), me=self.me)
         return _list
 
     def delete_list(self, list_name: str):
@@ -213,7 +230,7 @@ class SimpleMastodon(object):
         for account in _list["accounts"]:
             self.remove_account_from_list(account["acct"], list_name)
 
-    def account_in_list(self, id: int,
+    def account_in_list(self, account_id: int,
                         lists: list[AttribAccessDict] = None,
                         list_id: int = None) -> bool:
         if lists is None:
@@ -224,9 +241,9 @@ class SimpleMastodon(object):
                 raise MastodonResourceNotFound(
                     f"List ID {list_id} was not found")
             _list = _list[0]
-            return id in [account["id"] for account in _list["accounts"]]
+            return account_id in [account["id"] for account in _list["accounts"]]
         for list_ in lists:
-            if self.account_in_list(id,
+            if self.account_in_list(account_id,
                                     lists=lists, list_id=list_["id"]):
                 return True
         return False
@@ -260,14 +277,14 @@ class SimpleMastodon(object):
 
     def export_following_csv(self, account_address: str = None) -> str:
         accounts = self.get_following_accounts(account_address)
-        return accounts_to_csv(accounts)
+        return accounts_to_csv(accounts, me=self.me)
 
     def export_unlisted_accounts_csv(self):
-        return accounts_to_csv(self.get_unlisted_accounts())
+        return accounts_to_csv(self.get_unlisted_accounts(), me=self.me)
 
     def export_follower_csv(self, account_address: str = None) -> str:
         accounts = self.get_follower_accounts(account_address)
-        return accounts_to_csv(accounts)
+        return accounts_to_csv(accounts, me=self.me)
 
     def import_list_csv(self, list_csv: Union[AnyStr, TextIO], list_name):
         if isinstance(list_csv, str):
@@ -284,7 +301,7 @@ class SimpleMastodon(object):
 
     def export_list_csv(self, list_name: str = None) -> str:
         accounts = self.get_list(list_name, create=False)
-        return accounts_to_csv(accounts)
+        return accounts_to_csv(accounts, me=self.me)
 
 
 @click.group()
@@ -468,7 +485,7 @@ def _import_list(ctx, file, list_name, replace=False):
                help="Returns the full username of the configured account.")
 @click.pass_context
 def _whoami(ctx):
-    account = _format_record(ctx.obj.mastodon.mastodon.me())
+    account = ctx.obj.mastodon.me
     click.echo(account["acct"])
 
 
