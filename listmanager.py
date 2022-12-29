@@ -230,7 +230,7 @@ class SimpleMastodon(object):
         for account in _list["accounts"]:
             self.remove_account_from_list(account["acct"], list_name)
 
-    def account_in_list(self, account_id: int,
+    def account_in_list(self, _id: int,
                         lists: list[AttribAccessDict] = None,
                         list_id: int = None) -> bool:
         if lists is None:
@@ -241,9 +241,9 @@ class SimpleMastodon(object):
                 raise MastodonResourceNotFound(
                     f"List ID {list_id} was not found")
             _list = _list[0]
-            return account_id in [account["id"] for account in _list["accounts"]]
+            return _id in [account["id"] for account in _list["accounts"]]
         for list_ in lists:
-            if self.account_in_list(account_id,
+            if self.account_in_list(_id,
                                     lists=lists, list_id=list_["id"]):
                 return True
         return False
