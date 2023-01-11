@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0
+
+- Fix bug where only 40 accounts were ever returned in a list (close issue #1) 
+- Add `--debug` CLI option
+
 ## 1.1.0
 
 - Add `URL` and `Local URL` CSV columns

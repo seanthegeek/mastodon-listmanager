@@ -14,7 +14,7 @@ from mastodon import Mastodon, AttribAccessDict, MastodonAPIError
 
 """A Python module and CLI tool for managing Mastodon lists"""
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 logging.basicConfig(level=logging.WARNING,
                     format="%(levelname)s: %(message)s")
@@ -146,8 +146,9 @@ class SimpleMastodon(object):
     def get_following_accounts(self,
                                address: str = None) -> list[AttribAccessDict]:
         if address is None:
-            return _format_record(self.mastodon.account_following(
-                self.me), me=self.me)
+            return _format_record(self.mastodon.fetch_remaining(
+                self.mastodon.account_following(
+                    self.me)), me=self.me)
         address = address.lstrip("@")
         domain = address.split("@")[1]
         if domain == self.me["domain"]:
@@ -155,14 +156,17 @@ class SimpleMastodon(object):
         else:
             # Get list directly from the remote instance/server
             _mastodon = Mastodon(api_base_url=f"https://{domain}")
-        return _format_record(_mastodon.account_following(
-            _mastodon.account_lookup(address)["id"]), me=self.me)
+        accounts = _mastodon.account_following(
+            _mastodon.account_lookup(address)["id"])
+        accounts = _mastodon.fetch_remaining(accounts)
+        return _format_record(accounts, me=self.me)
 
     def get_follower_accounts(self,
                               address: str = None) -> list[AttribAccessDict]:
         if address is None:
-            return _format_record(self.mastodon.account_followers(
-                self.me, me=self.me))
+            return _format_record(self.mastodon.fetch_remaining(
+                self.mastodon.account_followers(
+                    self.me)), me=self.me)
         address = address.lstrip("@")
         domain = address.split("@")[1]
         if domain == self.me["domain"]:
@@ -170,8 +174,10 @@ class SimpleMastodon(object):
         else:
             # Get the list directly from the remote instance/server
             _mastodon = Mastodon(api_base_url=f"https://{domain}")
-        return _format_record(_mastodon.account_followers(
-            _mastodon.account_lookup(address)["id"]), me=self.me)
+        accounts = _mastodon.account_followers(
+            _mastodon.account_lookup(address)["id"])
+        accounts = _mastodon.fetch_remaining(accounts)
+        return _format_record(accounts, me=self.me)
 
     def unfollow_all_accounts(self):
         for account in self.get_following_accounts():
@@ -181,7 +187,9 @@ class SimpleMastodon(object):
         lists = self.mastodon.lists()
         for _list in lists:
             _list["accounts"] = _format_record(
-                self.mastodon.list_accounts(_list["id"]), me=self.me)
+                self.mastodon.fetch_remaining(
+                    self.mastodon.list_accounts(
+                        _list["id"])), me=self.me)
         return lists
 
     def get_list(self, name: str, create: bool = True) -> AttribAccessDict:
@@ -193,8 +201,9 @@ class SimpleMastodon(object):
             self.mastodon.list_create(name)
             return self.get_list(name)
         _list = _list[0]
-        _list["accounts"] = _format_record(
-            self.mastodon.list_accounts(_list["id"]), me=self.me)
+        accounts = self.mastodon.list_accounts(_list["id"])
+        accounts = self.mastodon.fetch_remaining(accounts)
+        _list["accounts"] = _format_record(accounts, me=self.me)
         return _list
 
     def delete_list(self, list_name: str):
