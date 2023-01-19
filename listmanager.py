@@ -14,7 +14,7 @@ from mastodon import Mastodon, AttribAccessDict, MastodonAPIError
 
 """A Python module and CLI tool for managing Mastodon lists"""
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 logging.basicConfig(level=logging.WARNING,
                     format="%(levelname)s: %(message)s")
@@ -309,7 +309,7 @@ class SimpleMastodon(object):
                     f"Unable to add {account_address} to {list_name}: {e}")
 
     def export_list_csv(self, list_name: str = None) -> str:
-        accounts = self.get_list(list_name, create=False)
+        accounts = self.get_list(list_name, create=False)["accounts"]
         return accounts_to_csv(accounts, me=self.me)
 
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1
+
+- Fix list exports
+
 ## 1.2.0
 
 - Fix bug where only 40 accounts were ever returned in a list (close issue #1) 
