@@ -2,7 +2,7 @@
 
 One of the biggest points of friction when using [Mastodon][1] is the
 [inability][2] to directly view and interact with the follows/follower lists of
-users on other Mastodon servers/instances. `listmanager.py`is a CLI
+users on other Mastodon servers/instances. `listmanager.py` is a CLI
 script built as a workaround for this problem.
 
 ## Features
