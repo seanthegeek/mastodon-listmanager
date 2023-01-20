@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0
+
+- Only look up the list once when adding multiple users to the same list
+  - List imports are **much** faster
+- Fix debug output
+
 ## 1.2.1
 
 - Fix list exports

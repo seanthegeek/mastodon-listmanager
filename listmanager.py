@@ -14,10 +14,17 @@ from mastodon import Mastodon, AttribAccessDict, MastodonAPIError
 
 """A Python module and CLI tool for managing Mastodon lists"""
 
-__version__ = "1.2.1"
+__version__ = "1.3.0"
 
-logging.basicConfig(level=logging.WARNING,
-                    format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+formatter = logging.Formatter(
+    fmt='%(levelname)s:%(message)s',
+    datefmt='%Y-%m-%d:%H:%M:%S')
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(logging.WARNING)
 
 
 class _CLIConfig(object):
@@ -32,7 +39,7 @@ class _CLIConfig(object):
         try:
             self.mastodon = SimpleMastodon(_mastodon)
         except Exception as e:
-            logging.error(e)
+            logger.error(e)
             exit(-1)
 
 
@@ -211,10 +218,14 @@ class SimpleMastodon(object):
         self.mastodon.list_delete(_list["id"])
 
     def add_account_to_list(self, account_address: str,
-                            list_name: str, create_list: bool = True):
+                            _list: AttribAccessDict = None,
+                            list_name: str = None, create_list: bool = True):
+        if _list is None and list_name is None:
+            raise ValueError("Must supply list or list_name")
         account = self.get_account(account_address)
-        _list = self.get_list(list_name, create=create_list)
-        if not self.account_in_list(account["id"], list_id=_list["id"]):
+        if _list is None:
+            _list = self.get_list(list_name, create=create_list)
+        if not self.account_in_list(account["id"], lists=[_list]):
             # Accounts must be followed before they can be added to a list
             self.mastodon.account_follow(account["id"])
             try:
@@ -282,7 +293,7 @@ class SimpleMastodon(object):
                 self.follow_account(
                     account_address, boosts=boosts, notify=notify)
             except Exception as e:
-                logging.warning(f"Unable to follow {account_address}: {e}")
+                logger.warning(f"Unable to follow {account_address}: {e}")
 
     def export_following_csv(self, account_address: str = None) -> str:
         accounts = self.get_following_accounts(account_address)
@@ -299,13 +310,15 @@ class SimpleMastodon(object):
         if isinstance(list_csv, str):
             list_csv = StringIO(list_csv)
         accounts = csv.DictReader(list_csv)
+        _list = self.get_list(list_name, create=True)
         for account in accounts:
             account_address = account["Account address"]
             try:
+                logger.debug(f"Adding {account_address} to {list_name}")
                 self.add_account_to_list(
-                    account_address, list_name, create_list=True)
+                    account_address, _list=_list)
             except Exception as e:
-                logging.warning(
+                logger.warning(
                     f"Unable to add {account_address} to {list_name}: {e}")
 
     def export_list_csv(self, list_name: str = None) -> str:
@@ -327,6 +340,8 @@ def _main(ctx, config, debug):
     """A simple CLI for managing Mastodon follows and lists"""
     ctx.obj = _CLIConfig(config)
     ctx.obj.debug = debug
+    if debug:
+        logger.setLevel(logging.DEBUG)
 
 
 @_main.command("follow")
@@ -337,9 +352,9 @@ def _follow(ctx, account):
     try:
         ctx.obj.mastodon.follow_account(account)
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
         if ctx.obj.debug:
-            logging.error(traceback.format_exc())
+            logger.error(traceback.format_exc())
         exit(-1)
 
 
@@ -351,9 +366,9 @@ def _unfollow(ctx, account):
     try:
         ctx.obj.mastodon.unfollow_account(account)
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
         if ctx.obj.debug:
-            logging.error(traceback.format_exc())
+            logger.error(traceback.format_exc())
         exit(-1)
 
 
@@ -378,9 +393,9 @@ def _export_followers(ctx, account=None, file=None):
         else:
             click.echo(output)
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
         if ctx.obj.debug:
-            logging.error(traceback.format_exc())
+            logger.error(traceback.format_exc())
         exit(-1)
 
 
@@ -394,7 +409,7 @@ def _export_followers(ctx, account=None, file=None):
 def export_following(ctx, account=None, unlisted=False, file=None):
     """Export the list of accounts being followed."""
     if account is not None and unlisted:
-        logging.error(
+        logger.error(
             "The --unlisted and --account options cannot be used together.")
         exit(1)
     try:
@@ -411,9 +426,9 @@ def export_following(ctx, account=None, unlisted=False, file=None):
         else:
             click.echo(output)
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
         if ctx.obj.debug:
-            logging.error(traceback.format_exc())
+            logger.error(traceback.format_exc())
         exit(-1)
 
 
@@ -439,9 +454,9 @@ def _export_list(ctx, name=None, file=None):
         else:
             click.echo(output)
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
         if ctx.obj.debug:
-            logging.error(traceback.format_exc())
+            logger.error(traceback.format_exc())
         exit(-1)
 
 
@@ -460,10 +475,10 @@ def _import_following_accounts(ctx, file, replace=False):
         with open(file, errors="ignore") as input_file:
             input_csv = input_file.read()
     except Exception as e:
-        logging.error(f"Failed to read input file: {e}")
-        logging.error(e)
+        logger.error(f"Failed to read input file: {e}")
+        logger.error(e)
         if ctx.obj.debug:
-            logging.error(traceback.format_exc())
+            logger.error(traceback.format_exc())
         exit(-1)
     if replace:
         ctx.obj.mastodon.mastodon.unfollow_all_accounts()
@@ -482,7 +497,7 @@ def _import_list(ctx, file, list_name, replace=False):
         with open(file, errors="ignore") as input_file:
             input_csv = input_file.read()
     except Exception as e:
-        logging.error(f"Failed to read input file: {e}")
+        logger.error(f"Failed to read input file: {e}")
         exit(-1)
     if replace:
         ctx.obj.mastodon.mastodon.remove_all_accounts_from_list(list_name)
