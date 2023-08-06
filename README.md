@@ -52,7 +52,7 @@ Use this template for the file:
 ```json
 {
   "base_url": "https://infosec.exchange",
-  "client_id": "REDACTED",
+  "client_key": "REDACTED",
   "client_secret": "REDACTED",
   "access_token": "REDACTED"
 }
@@ -132,8 +132,9 @@ Usage: listmanager.py export list [OPTIONS]
   Export a list.
 
 Options:
-  -n, --name TEXT  The name of a list. Omit to show a list of lists.
-  -f, --file TEXT  A file path to write to.
+  -n, --name TEXT  The name of a list. Omit to show a list of lists. Use all
+                   to export all lists.
+  -f, --file TEXT  A path to write to.
   --help           Show this message and exit.
 ```
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.0
+
+- Replace `client_id` config field with `client_key` to match the new web UI
+  - Use `client_id` as a fallback
+- Fix bug that caused an empty list to be created when the `export list` command is used with a list name that does not exist
+- Provide more friendly output when a config file cannot be found
+- Add the ability to export all lists to CSV files in one command
+
 ## 1.3.0
 
 - Only look up the list once when adding multiple users to the same list
@@ -12,7 +20,7 @@
 
 ## 1.2.0
 
-- Fix bug where only 40 accounts were ever returned in a list (close issue #1) 
+- Fix bug where only 40 accounts were ever returned in a list (close issue #1)
 - Add `--debug` CLI option
 
 ## 1.1.0

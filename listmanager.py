@@ -3,6 +3,7 @@ import logging
 import traceback
 import json
 import csv
+import os.path
 import urllib.parse
 from typing import Union, List, Dict, AnyStr, TextIO
 from io import StringIO
@@ -14,7 +15,7 @@ from mastodon import Mastodon, AttribAccessDict, MastodonAPIError
 
 """A Python module and CLI tool for managing Mastodon lists"""
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -29,11 +30,17 @@ logger.setLevel(logging.WARNING)
 
 class _CLIConfig(object):
     def __init__(self, config):
-        with open(config) as config_file:
-            config = json.loads(config_file.read())
+        try:
+            with open(config) as config_file:
+                config = json.loads(config_file.read())
+                if "client_key" not in config and "client_id" in config:
+                    config["client_key"] = config["client_id"]
+        except FileNotFoundError:
+            logger.error(f"File not found: {config_file}")
+            exit(-1)
 
         _mastodon = Mastodon(api_base_url=config["base_url"],
-                             client_id=config["client_id"],
+                             client_id=config["client_key"],
                              client_secret=config["client_secret"],
                              access_token=config["access_token"])
         try:
@@ -204,7 +211,7 @@ class SimpleMastodon(object):
                      == name, self.mastodon.lists()))
         if len(_list) == 0:
             if not create:
-                ValueError(f"A list named {name} does not exist")
+                raise ValueError(f"A list named {name} does not exist")
             self.mastodon.list_create(name)
             return self.get_list(name)
         _list = _list[0]
@@ -434,30 +441,50 @@ def export_following(ctx, account=None, unlisted=False, file=None):
 
 @_export.command("list", help="Export a list.")
 @click.option("--name", "-n",
-              help="The name of a list. Omit to show a list of lists.")
-@click.option("--file", "-f", help="A file path to write to.")
+              help="The name of a list. Omit to show a list of lists. \
+Use all to export all lists.")
+@click.option("--file", "-f", help="A path to write to.")
 @click.pass_context
 def _export_list(ctx, name=None, file=None):
     if name is None:
-        click.echo("Please provide the name of a list to export.")
+        click.echo("Please provide the name of a list to export. \
+Use all to to export all lists to CSV files.")
         for _list in ctx.obj.mastodon.get_lists():
             click.echo(f"{_list['title']} - {len(_list['accounts'])} accounts")
         exit(-1)
-    try:
-        output = ctx.obj.mastodon.export_list_csv(name)
-        if file is not None:
-            with open(file, "w",
-                      encoding="utf-8",
-                      newline="\n",
-                      errors="replace") as output_file:
-                output_file.write(output)
-        else:
-            click.echo(output)
-    except Exception as e:
-        logger.error(e)
-        if ctx.obj.debug:
-            logger.error(traceback.format_exc())
-        exit(-1)
+    elif name.lower() == "all":
+        for _list in ctx.obj.mastodon.get_lists():
+            path = f"{_list['title']}.csv"
+            if file is not None:
+                path = os.path.join(file, path)
+            try:
+                output = ctx.obj.mastodon.export_list_csv(_list["title"])
+                with open(path, "w",
+                          encoding="utf-8",
+                          newline="\n",
+                          errors="replace") as output_file:
+                    output_file.write(output)
+            except Exception as e:
+                logger.error(e)
+                if ctx.obj.debug:
+                    logger.error(traceback.format_exc())
+                exit(-1)
+    else:
+        try:
+            output = ctx.obj.mastodon.export_list_csv(name)
+            if file is not None:
+                with open(file, "w",
+                          encoding="utf-8",
+                          newline="\n",
+                          errors="replace") as output_file:
+                    output_file.write(output)
+            else:
+                click.echo(output)
+        except Exception as e:
+            logger.error(e)
+            if ctx.obj.debug:
+                logger.error(traceback.format_exc())
+            exit(-1)
 
 
 @_main.group("import")
